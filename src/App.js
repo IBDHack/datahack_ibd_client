@@ -61,7 +61,7 @@ Survey.StylesManager.applyTheme('darkrose')
 
 const useColonFaces = true;
 const sesCdLastRemissionValue = 3;
-const requireRequiredValues = false;
+const requireRequiredValues = true;
 
 const surveyDict = {
   title: 'The Short Inflammatory Bowel Disease Questionnaire',
