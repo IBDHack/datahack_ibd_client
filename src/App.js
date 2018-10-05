@@ -19,6 +19,9 @@ import sesCd14 from './sesCd14.jpg'
 import sesCd15 from './sesCd15.jpg'
 import sesCd16 from './sesCd16.jpg'
 
+import happyColon from './happy_colon.png'
+import sadColon from './sad_colon.png'
+
 import * as Survey from 'survey-react'
 import 'survey-react/survey.css'
 import 'bootstrap/dist/css/bootstrap.css'
@@ -56,6 +59,10 @@ widgets.bootstrapslider(Survey)
 
 Survey.StylesManager.applyTheme('darkrose')
 
+const useColonFaces = true;
+const sesCdLastRemissionValue = 3;
+const requireRequiredValues = false;
+
 const surveyDict = {
   title: 'The Short Inflammatory Bowel Disease Questionnaire',
   showProgressBar: 'top',
@@ -65,8 +72,32 @@ const surveyDict = {
       questions: [
         {
           type: "dropdown",
+          name: "ethniticity",
+          title: "What is your ethniticity?",
+          choices: [
+            "Declined to answer",
+            "Black",
+            "Filipino",
+            "Hispanic",
+            "Indian/East Asian",
+            "White",
+            "Other",
+          ]
+        },
+        {
+          type: "text",
+          name: "age",
+          title: "What is your age?",
+          isRequired: requireRequiredValues,
+          defaultValue: 18,
+          inputType: "number"
+        },
+        {
+          type: "dropdown",
           name: "ibdType",
           title: "What type of IBD (Inflammatory bowel disease) do you have? ",
+          isRequired: requireRequiredValues,
+          defaultValue: "cd",
           choices: [
             {
               value: "cd",
@@ -543,6 +574,7 @@ const surveyDict = {
         {
           name: 'microbiomeFile',
           title: 'Upload a microbiome result file.',
+          isRequired: requireRequiredValues,
           type: 'file',
           commentText: 'Comment lala',
           valueName: 'microbiomeFile',
@@ -633,18 +665,30 @@ class App extends Component {
     console.log('Complete! ', survey)
     const surveyResult = survey.valuesHash;
 
-    const ibdRemissionPrediction = await predictIBDRemission(surveyResult);
-    console.log('IDB remission prediction result:', ibdRemissionPrediction);
+    let microbiomeData = '';
+    try {
+      microbiomeData = surveyResult.microbiomeFile[0].content
+    } catch (e) {
+      microbiomeData = ''
+    }
+
+    const finishedSurveyResult = {
+      'microbiomeData': microbiomeData
+    };
+
+    const ibdRemissionPrediction = await predictIBDRemission(finishedSurveyResult);
+    console.log('IDB remission prediction result:', JSON.stringify(ibdRemissionPrediction));
 
     this.setState({
-      sesCd: getRandomInt(16),
+      sesCd: ibdRemissionPrediction.sesCdScore,
+      inRemission: ibdRemissionPrediction.inRemission,
     })
   }
 
   sesCdToText (sesCd) {
-    if (sesCd >= 0 && sesCd <= 2) {
+    if (sesCd >= 0 && sesCd <= sesCdLastRemissionValue) {
       return 'Remission'
-    } else if (sesCd >= 3 && sesCd <= 6) {
+    } else if (sesCd >= 4 && sesCd <= 6) {
       return 'Mild endoscopic activity'
     } else if (sesCd >= 7 && sesCd <= 15) {
       return 'Moderate endoscopic activity\n'
@@ -655,17 +699,11 @@ class App extends Component {
     }
   }
 
-  sesCdToRecommendation (sesCd) {
-    if (sesCd >= 0 && sesCd <= 2) {
-      return 'Maintain existing treatment'
-    } else if (sesCd >= 3 && sesCd <= 6) {
-      return 'Maintain existing treatment; repeat in 3 months'
-    } else if (sesCd >= 7 && sesCd <= 15) {
-      return 'Consider endoscopic probe\n'
-    } else if (sesCd > 15) {
-      return 'Endoscopic probe required\n'
+  sesCdToRecommendation (inRemission) {
+    if (inRemission) {
+      return 'IBD in remission; no need for endoscopic probe (colonoscopy)'
     } else {
-      return 'Uncertain'
+      return 'IBD is not in remission; consider endoscopic probe (colonoscopy). Consult with your doctor or other qualified health care professional'
     }
   }
 
@@ -688,11 +726,22 @@ class App extends Component {
       sesCd14,
       sesCd15,
       sesCd16,
+      happyColon,
+      sadColon,
     }
 
     let sesCdImageValue = 'sesCd16'
-    if (sesCd >= 0 && sesCd <= 15) {
-      sesCdImageValue = `sesCd${sesCd}`
+
+    if (useColonFaces) {
+      if (sesCd >= 0 && sesCd <= sesCdLastRemissionValue) {
+        sesCdImageValue = 'happyColon';
+      } else {
+        sesCdImageValue = 'sadColon';
+      }
+    } else {
+      if (sesCd >= 0 && sesCd <= 15) {
+        sesCdImageValue = `sesCd${sesCd}`
+      }
     }
 
     return sesCdImages[sesCdImageValue]
@@ -731,7 +780,7 @@ class App extends Component {
 
               </strong>
 
-              <strong className='bold-text black'>SES-CD Result:</strong><br/>
+              <strong className='bold-text black'>Estimated SES-CD Result:</strong><br/>
               <strong className="bold-text bold-link black">
                 {this.sesCdToText(this.state.sesCd)} (score {this.state.sesCd})
               </strong>
@@ -744,7 +793,7 @@ class App extends Component {
 
               <strong className='bold-text black'>Recommendation:</strong><br/>
               <strong className="bold-text bold-link black">
-                {this.sesCdToRecommendation(this.state.sesCd)}
+                {this.sesCdToRecommendation(this.state.inRemission)}
               </strong>
 
               <br/>
@@ -761,7 +810,7 @@ class App extends Component {
   }
 
   renderSurvey () {
-    return (<div className='surveyjs'>
+    return (<div className='surveyjs' style={{ minHeight: '600px'}}>
         <Survey.Survey
           model={surveyModel}
           onComplete={this.onComplete}
@@ -804,7 +853,7 @@ class App extends Component {
             <h1 className='heading-1'>An alternative to <span
               className='thiner text-span'/></h1>
             <h1
-              className='heading-1 heading-color heading-hero-spinner'>endoscopy</h1>
+              className='heading-1 heading-color heading-hero-spinner'>colonoscopy</h1>
             <h1
               className='heading-1 buttom'>3-5.10.2018<span
               className='thiner text-span'/></h1></div>
@@ -862,7 +911,7 @@ class App extends Component {
                   <br/>
                   <br/>
 
-                  This questionnaire is designed to find out how you have been
+                  This app is designed to find out how you have been
                   feeling
                   during the past TWO WEEKS. You will be asked about symptoms
                   you have
@@ -877,9 +926,9 @@ class App extends Component {
                   <br/>
                   <br/>
 
-                  The goal is to discover your Simple Endoscopic Score for
-                  Crohn’s Disease (SES-CD) score, and <u>save you from having to
-                  suffer a colonoscopy!</u>
+                  The goal is to estimate your Simple Endoscopic Score for
+                  Crohn’s Disease (SES-CD) score, and <u>save you from needing
+                  to have a colonoscopy!</u>
                   <br/>
                   <br/>
 
